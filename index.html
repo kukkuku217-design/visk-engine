@@ -6,12 +6,11 @@
         #editor-side { width: 50%; height: 100%; display: flex; flex-direction: column; border-right: 2px solid #252529; }
         #monaco-container { flex-grow: 1; height: calc(100% - 90px); background: #131316; position: relative; }
         
-        /* Наш крутой независимый редактор кода */
         #code-input {
             width: 100%;
             height: 100%;
             background: #131316;
-            color: #00ff66; /* Зеленый геймерский цвет для кода */
+            color: #00ff66;
             border: none;
             padding: 15px;
             font-family: 'Consolas', 'Courier New', monospace;
@@ -33,22 +32,31 @@
         <div style="background: #1c1c1f; padding: 12px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #252529;">
             <span style="font-size: 13px; font-weight: bold; text-transform: uppercase; color: #9a9a1a;">Режим VISK ENGINE:</span>
             <select id="dimension-select" style="background: #2b2b30; color: white; border: 1px solid #45454c; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                <option value="3D">3D (Объемный)</option>
-                <option value="2D">2D (Плоский)</option>
+                <option value="3D">3D (Объемный FPS)</option>
+                <option value="2D">2D (Кинематографичный)</option>
             </select>
         </div>
 
         <div id="monaco-container">
-            <textarea id="code-input" spellcheck="false"># Скрипт движка VISK ENGINE
-bg_color #1a1a24
-cube_spawn 0 0 0</textarea>
+            <textarea id="code-input" spellcheck="false"># Демонстрация VISK SDK 3.0 (STALKER & NOVEL Edition)
+# 1. ТЕСТ 3D-РЕЖИМА (Кликни на правый экран, ходи на WASD + Мышь. Выход на ESC)
+fog_set 0.06
+object_spawn 0 0 -4 concrete
+object_spawn -3 0 -6 concrete
+
+# 2. ТЕСТ 2D-РЕЖИМА (Переключи селектор сверху в 2D)
+# bg_fade bunker.jpg
+# sprite_img 0 -0.8 sidorovich.png
+# speaker_name Сидорович
+# text_show Ну привет, сталкер! Чего пришел?</textarea>
         </div>
         <button id="run-btn">ЗАПУСТИТЬ КОД (COMPILE)</button>
     </div>
 
-   <div id="game-side">
-        <div id="dialogue-box" style="display: none; position: absolute; bottom: 20px; left: 5%; width: 90%; background: rgba(20, 20, 25, 0.85); border: 2px solid #007acc; border-radius: 8px; padding: 15px; box-sizing: border-box; font-size: 18px; color: #fff; z-index: 10;">
-            <div id="dialogue-text">Привет, это текст по умолчанию!</div>
+    <div id="game-side">
+        <div id="dialogue-box" style="display: none; position: absolute; bottom: 20px; left: 5%; width: 90%; background: rgba(15, 15, 20, 0.9); border: 2px solid #007acc; border-radius: 8px; padding: 15px; box-sizing: border-box; font-size: 18px; color: #fff; z-index: 10;">
+            <div id="speaker-title" style="font-weight: bold; color: #00ff66; margin-bottom: 5px; font-size: 16px; text-transform: uppercase;"></div>
+            <div id="dialogue-text">Текст диалога</div>
         </div>
     </div>
 
