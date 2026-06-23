@@ -3,59 +3,139 @@ window.onload = () => {
     if (!container) return;
 
     const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x1a1a1f, 0.08); // Мрачный туман по умолчанию
 
-    const camera3D = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
-    camera3D.position.set(2, 2, 4);
-    camera3D.lookAt(0, 0, 0);
+    // Камера игрока
+    const camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+    camera.position.set(0, 1.6, 5); // Глаза игрока на высоте 1.6м
 
-    const aspect = container.clientWidth / container.clientHeight;
-    const d = 4;
-    const camera2D = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
-    camera2D.position.set(0, 0, 5);
-    camera2D.lookAt(0, 0, 0);
-
-    let activeCamera = camera3D;
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setClearColor(0x111116);
+    renderer.setClearColor(0x1a1a1f);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
     container.appendChild(renderer.domElement);
 
-    const light = new THREE.DirectionalLight(0xffffff, 1.2);
-    light.position.set(3, 6, 3);
-    scene.add(light);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+    // Освещение (как солнце в Зоне)
+    const sunLight = new THREE.DirectionalLight(0xfff5eb, 2.5);
+    sunLight.position.set(10, 20, 10);
+    scene.add(sunLight);
+    scene.add(new THREE.AmbientLight(0x556677, 0.4));
 
-    document.getElementById('dimension-select').addEventListener('change', (e) => {
-        activeCamera = (e.target.value === '3D') ? camera3D : camera2D;
+    const textureLoader = new THREE.TextureLoader();
+    let currentMusic = null;
+
+    // Системные переменные для эффектов
+    let shakeTime = 0;
+    let activeBg = null;
+    let activeSprite = null;
+
+    // --- СИСТЕМА УПРАВЛЕНИЯ ОТ ПЕРВОГО ЛИЦА (FPS) ---
+    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+    let rotationX = 0, rotationY = 0;
+    const speed = 0.08;
+
+    // Захват курсора при клике на экран (только если выбран 3D режим)
+    container.addEventListener('click', () => {
+        const mode = document.getElementById('dimension-select').value;
+        if (mode === '3D') container.requestPointerLock();
     });
 
+    document.addEventListener('mousemove', (e) => {
+        if (document.pointerLockElement === container) {
+            rotationX -= e.movementX * 0.002;
+            rotationY -= e.movementY * 0.002;
+            rotationY = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, rotationY));
+            camera.quaternion.setFromEuler(new THREE.Euler(rotationY, rotationX, 0, 'YXZ'));
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'KeyW') moveForward = true;
+        if (e.code === 'KeyS') moveBackward = true;
+        if (e.code === 'KeyA') moveLeft = true;
+        if (e.code === 'KeyD') moveRight = true;
+    });
+    document.addEventListener('keyup', (e) => {
+        if (e.code === 'KeyW') moveForward = false;
+        if (e.code === 'KeyS') moveBackward = false;
+        if (e.code === 'KeyA') moveLeft = false;
+        if (e.code === 'KeyD') moveRight = false;
+    });
+
+    function updateMovement() {
+        if (document.pointerLockElement !== container) return;
+        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+        forward.y = 0; right.y = 0;
+        forward.normalize(); right.normalize();
+
+        if (moveForward) camera.position.addScaledVector(forward, speed);
+        if (moveBackward) camera.position.addScaledVector(forward, -speed);
+        if (moveLeft) camera.position.addScaledVector(right, -speed);
+        if (moveRight) camera.position.addScaledVector(right, speed);
+    }
+
+    // РЕНДЕР-ЦИКЛ + ЭФФЕКТЫ
     function animate() {
         requestAnimationFrame(animate);
-        scene.traverse(obj => {
-            if (obj.isMesh && obj.name === "cube3d") {
-                obj.rotation.x += 0.015;
-                obj.rotation.y += 0.015;
-            }
-        });
-        renderer.render(scene, activeCamera);
+        
+        const mode = document.getElementById('dimension-select').value;
+        if (mode === '3D') {
+            updateMovement();
+        }
+
+        // Эффект тряски экрана (Screen Shake)
+        if (shakeTime > 0) {
+            shakeTime -= 0.05;
+            camera.position.x += (Math.random() - 0.5) * 0.15;
+            camera.position.y += (Math.random() - 0.5) * 0.15;
+            if (shakeTime <= 0) { camera.position.x = 0; camera.position.y = (mode === '3D') ? 1.6 : 1.6; }
+        }
+
+        // Плавное появление фона (2D Fade)
+        if (activeBg && activeBg.material.opacity < 1) {
+            activeBg.material.opacity += 0.05;
+        }
+
+        renderer.render(scene, camera);
     }
     animate();
 
+    // ПАРСЕР КОМАНД ДЛЯ ИГР
     document.getElementById('run-btn').addEventListener('click', () => {
         const codeInput = document.getElementById('code-input');
         if (!codeInput) return;
         
-        const code = codeInput.value;
-        const lines = code.split('\n');
+        const lines = codeInput.value.split('\n');
+        const mode = document.getElementById('dimension-select').value;
 
+        // Очистка старых 3D объектов
         const toRemove = [];
         scene.traverse(obj => { if (obj.isMesh) toRemove.push(obj); });
         toRemove.forEach(obj => scene.remove(obj));
+        activeBg = null; activeSprite = null;
 
-        // По умолчанию прячем текстовое окно при перезапуске кода
-        const dialogueBox = document.getElementById('dialogue-box');
-        if (dialogueBox) dialogueBox.style.display = 'none';
+        // Настройка камеры под режим
+        if (mode === '2D') {
+            camera.position.set(0, 1.6, 5);
+            camera.rotation.set(0, 0, 0);
+        }
+
+        // Сброс окон текста
+        document.getElementById('dialogue-box').style.display = 'none';
+        document.getElementById('speaker-title').innerText = '';
+
+        const aspect = container.clientWidth / container.clientHeight;
+
+        // Создаем землю ТОЛЬКО для 3D
+        if (mode === '3D') {
+            const floorGeom = new THREE.PlaneGeometry(100, 100);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x111317, roughness: 0.9 });
+            const floor = new THREE.Mesh(floorGeom, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            scene.add(floor);
+        }
 
         lines.forEach(line => {
             const trimmed = line.trim();
@@ -64,45 +144,88 @@ window.onload = () => {
             const parts = trimmed.split(/\s+/);
             const command = parts[0];
 
-            if (command === 'bg_color') {
-                renderer.setClearColor(parts[1]);
+            // --- 2D КОМАНДЫ ---
+            if (command === 'bg_fade') {
+                textureLoader.load(parts[1], (texture) => {
+                    const geom = new THREE.PlaneGeometry(8 * aspect, 8);
+                    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+                    mat.opacity = 0;
+                    activeBg = new THREE.Mesh(geom, mat);
+                    activeBg.position.set(0, 1.6, 0);
+                    scene.add(activeBg);
+                });
             }
 
-            if (command === 'cube_spawn') {
-                const geom = new THREE.BoxGeometry(1.2, 1.2, 1.2);
-                const userColor = parts[4] || '#00ff66'; 
-                const mat = new THREE.MeshStandardMaterial({ color: userColor, roughness: 0.3 });
-                const cube = new THREE.Mesh(geom, mat);
-                cube.name = "cube3d";
-                
-                const x = parseFloat(parts[1]) || 0;
-                const y = parseFloat(parts[2]) || 0;
-                const z = parseFloat(parts[3]) || 0;
-                cube.position.set(x, y, z);
-                
-                scene.add(cube);
+            if (command === 'sprite_img') {
+                textureLoader.load(parts[3], (texture) => {
+                    const geom = new THREE.PlaneGeometry(2.2, 3.0);
+                    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+                    activeSprite = new THREE.Mesh(geom, mat);
+                    activeSprite.position.set(parseFloat(parts[1]), parseFloat(parts[2]) + 1.6, 0.2);
+                    scene.add(activeSprite);
+                });
             }
 
-            if (command === 'sprite_show') {
-                const geom = new THREE.PlaneGeometry(1.3, 1.8);
-                const userColor = parts[3] || '#ff0055';
-                const mat = new THREE.MeshBasicMaterial({ color: userColor, side: THREE.DoubleSide });
-                const sprite = new THREE.Mesh(geom, mat);
-                
-                const x = parseFloat(parts[1]) || 0;
-                const y = parseFloat(parts[2]) || 0;
-                sprite.position.set(x, y, 0);
-                
-                scene.add(sprite);
+            if (command === 'sprite_state') {
+                if (activeSprite) {
+                    textureLoader.load(parts[1], (texture) => {
+                        activeSprite.material.map = texture;
+                        activeSprite.material.needsUpdate = true;
+                    });
+                }
+            }
+
+            if (command === 'screen_shake') {
+                shakeTime = 1.0;
+            }
+
+            if (command === 'speaker_name') {
+                const name = trimmed.substring(trimmed.indexOf(' ') + 1);
+                document.getElementById('speaker-title').innerText = name;
             }
 
             if (command === 'text_show') {
-                const dialogueText = document.getElementById('dialogue-text');
-                if (dialogueBox && dialogueText) {
-                    const message = trimmed.substring(trimmed.indexOf(' ') + 1);
-                    dialogueText.innerText = message;
-                    dialogueBox.style.display = 'block';
+                const message = trimmed.substring(trimmed.indexOf(' ') + 1);
+                document.getElementById('dialogue-text').innerText = message;
+                document.getElementById('dialogue-box').style.display = 'block';
+            }
+
+            // --- 3D КОМАНДЫ ---
+            if (command === 'object_spawn') {
+                const x = parseFloat(parts[1]) || 0;
+                const y = parseFloat(parts[2]) || 0;
+                const z = parseFloat(parts[3]) || 0;
+                const textureFolder = parts[4];
+
+                const geom = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+                let mat;
+
+                if (textureFolder) {
+                    const albedo = textureLoader.load(`${textureFolder}/albedo.jpg`);
+                    const normal = textureLoader.load(`${textureFolder}/normal.jpg`);
+                    const roughness = textureLoader.load(`${textureFolder}/roughness.jpg`);
+                    mat = new THREE.MeshStandardMaterial({ map: albedo, normalMap: normal, roughnessMap: roughness, roughness: 1.0 });
+                } else {
+                    mat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.7 });
                 }
+
+                const mesh = new THREE.Mesh(geom, mat);
+                mesh.position.set(x, y + 0.75, z);
+                scene.add(mesh);
+            }
+
+            if (command === 'fog_set') {
+                scene.fog.density = parseFloat(parts[1]) || 0.02;
+            }
+
+            // МЕДИА
+            if (command === 'play_music') {
+                if (currentMusic) currentMusic.pause();
+                currentMusic = new Audio(parts[1]); currentMusic.loop = true; currentMusic.volume = 0.4;
+                currentMusic.play().catch(() => {});
+            }
+            if (command === 'play_sound') {
+                const sound = new Audio(parts[1]); sound.volume = 0.6; sound.play();
             }
         });
     });
