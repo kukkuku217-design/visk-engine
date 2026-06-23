@@ -1,0 +1,15 @@
+{
+  "name": "visk-engine",
+  "version": "1.0.0",
+  "description": "3D/2D Novel Engine",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [],
+  "author": "VOOIIISDEK",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^42.4.1"
+  }
+}
