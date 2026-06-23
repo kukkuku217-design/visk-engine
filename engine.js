@@ -3,11 +3,9 @@ window.onload = () => {
     if (!container) return;
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x1a1a1f, 0.08); // Мрачный туман по умолчанию
+    scene.fog = new THREE.FogExp2(0x1a1a1f, 0.04);
 
-    // Камера игрока
     const camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
-    camera.position.set(0, 1.6, 5); // Глаза игрока на высоте 1.6м
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     renderer.setSize(container.clientWidth, container.clientHeight);
@@ -16,29 +14,32 @@ window.onload = () => {
     renderer.toneMappingExposure = 1.0;
     container.appendChild(renderer.domElement);
 
-    // Освещение (как солнце в Зоне)
     const sunLight = new THREE.DirectionalLight(0xfff5eb, 2.5);
     sunLight.position.set(10, 20, 10);
     scene.add(sunLight);
-    scene.add(new THREE.AmbientLight(0x556677, 0.4));
+    scene.add(new THREE.AmbientLight(0x556677, 0.5));
 
     const textureLoader = new THREE.TextureLoader();
     let currentMusic = null;
 
-    // Системные переменные для эффектов
     let shakeTime = 0;
     let activeBg = null;
     let activeSprite = null;
+    
+    let playerTank = null;
+    let tankMoveSpeed = 0.07;
+    let tankRotSpeed = 0.03;
+    let cameraFollowDist = 6;
+    let cameraFollowHeight = 2.5;
+    let tankBullets = [];
 
-    // --- СИСТЕМА УПРАВЛЕНИЯ ОТ ПЕРВОГО ЛИЦА (FPS) ---
-    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+    let keys = { KeyW: false, KeyS: false, KeyA: false, KeyD: false };
     let rotationX = 0, rotationY = 0;
-    const speed = 0.08;
 
-    // Захват курсора при клике на экран (только если выбран 3D режим)
     container.addEventListener('click', () => {
         const mode = document.getElementById('dimension-select').value;
-        if (mode === '3D') container.requestPointerLock();
+        if (mode === '3D_FPS') container.requestPointerLock();
+        if (mode === '3D_VEHICLE' && playerTank) fireTankBullet();
     });
 
     document.addEventListener('mousemove', (e) => {
@@ -50,59 +51,70 @@ window.onload = () => {
         }
     });
 
-    document.addEventListener('keydown', (e) => {
-        if (e.code === 'KeyW') moveForward = true;
-        if (e.code === 'KeyS') moveBackward = true;
-        if (e.code === 'KeyA') moveLeft = true;
-        if (e.code === 'KeyD') moveRight = true;
-    });
-    document.addEventListener('keyup', (e) => {
-        if (e.code === 'KeyW') moveForward = false;
-        if (e.code === 'KeyS') moveBackward = false;
-        if (e.code === 'KeyA') moveLeft = false;
-        if (e.code === 'KeyD') moveRight = false;
-    });
+    document.addEventListener('keydown', (e) => { if (e.code in keys) keys[e.code] = true; });
+    document.addEventListener('keyup', (e) => { if (e.code in keys) keys[e.code] = false; });
 
-    function updateMovement() {
-        if (document.pointerLockElement !== container) return;
-        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-        forward.y = 0; right.y = 0;
-        forward.normalize(); right.normalize();
-
-        if (moveForward) camera.position.addScaledVector(forward, speed);
-        if (moveBackward) camera.position.addScaledVector(forward, -speed);
-        if (moveLeft) camera.position.addScaledVector(right, -speed);
-        if (moveRight) camera.position.addScaledVector(right, speed);
+    function fireTankBullet() {
+        const bullet = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffaa00 }));
+        bullet.position.copy(playerTank.position);
+        bullet.position.y += 0.6;
+        
+        const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(playerTank.quaternion);
+        bullet.userData = { dir: direction, speed: 0.4 };
+        
+        scene.add(bullet);
+        tankBullets.push(bullet);
+        shakeTime = 0.3;
     }
 
-    // РЕНДЕР-ЦИКЛ + ЭФФЕКТЫ
+    function updateGameplay() {
+        const mode = document.getElementById('dimension-select').value;
+
+        if (mode === '3D_FPS' && document.pointerLockElement === container) {
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+            forward.y = 0; right.y = 0; forward.normalize(); right.normalize();
+
+            if (keys.KeyW) camera.position.addScaledVector(forward, 0.08);
+            if (keys.KeyS) camera.position.addScaledVector(forward, -0.08);
+            if (keys.KeyA) camera.position.addScaledVector(right, -0.08);
+            if (keys.KeyD) camera.position.addScaledVector(right, 0.08);
+        }
+
+        if (mode === '3D_VEHICLE' && playerTank) {
+            if (keys.KeyW) playerTank.position.addScaledVector(new THREE.Vector3(0, 0, -1).applyQuaternion(playerTank.quaternion), tankMoveSpeed);
+            if (keys.KeyS) playerTank.position.addScaledVector(new THREE.Vector3(0, 0, -1).applyQuaternion(playerTank.quaternion), -tankMoveSpeed * 0.6);
+            if (keys.KeyA) playerTank.rotation.y += tankRotSpeed;
+            if (keys.KeyD) playerTank.rotation.y -= tankRotSpeed;
+
+            const offset = new THREE.Vector3(0, cameraFollowHeight, cameraFollowDist).applyQuaternion(playerTank.quaternion);
+            camera.position.copy(playerTank.position).add(offset);
+            camera.lookAt(playerTank.position.clone().add(new THREE.Vector3(0, 0.5, 0)));
+        }
+
+        for (let i = tankBullets.length - 1; i >= 0; i--) {
+            let b = tankBullets[i];
+            b.position.addScaledVector(b.userData.dir, b.userData.speed);
+            if (b.position.length() > 200) { scene.remove(b); tankBullets.splice(i, 1); }
+        }
+    }
+
     function animate() {
         requestAnimationFrame(animate);
-        
-        const mode = document.getElementById('dimension-select').value;
-        if (mode === '3D') {
-            updateMovement();
-        }
+        updateGameplay();
 
-        // Эффект тряски экрана (Screen Shake)
         if (shakeTime > 0) {
             shakeTime -= 0.05;
-            camera.position.x += (Math.random() - 0.5) * 0.15;
-            camera.position.y += (Math.random() - 0.5) * 0.15;
-            if (shakeTime <= 0) { camera.position.x = 0; camera.position.y = (mode === '3D') ? 1.6 : 1.6; }
+            camera.position.x += (Math.random() - 0.5) * 0.12;
+            camera.position.y += (Math.random() - 0.5) * 0.12;
         }
 
-        // Плавное появление фона (2D Fade)
-        if (activeBg && activeBg.material.opacity < 1) {
-            activeBg.material.opacity += 0.05;
-        }
+        if (activeBg && activeBg.material.opacity < 1) activeBg.material.opacity += 0.05;
 
         renderer.render(scene, camera);
     }
     animate();
 
-    // ПАРСЕР КОМАНД ДЛЯ ИГР
     document.getElementById('run-btn').addEventListener('click', () => {
         const codeInput = document.getElementById('code-input');
         if (!codeInput) return;
@@ -110,31 +122,18 @@ window.onload = () => {
         const lines = codeInput.value.split('\n');
         const mode = document.getElementById('dimension-select').value;
 
-        // Очистка старых 3D объектов
         const toRemove = [];
         scene.traverse(obj => { if (obj.isMesh) toRemove.push(obj); });
         toRemove.forEach(obj => scene.remove(obj));
-        activeBg = null; activeSprite = null;
+        activeBg = null; activeSprite = null; playerTank = null; tankBullets = [];
 
-        // Настройка камеры под режим
-        if (mode === '2D') {
-            camera.position.set(0, 1.6, 5);
-            camera.rotation.set(0, 0, 0);
-        }
-
-        // Сброс окон текста
+        if (mode !== '3D_VEHICLE') { camera.position.set(0, 1.6, 5); camera.rotation.set(0,0,0); }
         document.getElementById('dialogue-box').style.display = 'none';
-        document.getElementById('speaker-title').innerText = '';
-
         const aspect = container.clientWidth / container.clientHeight;
 
-        // Создаем землю ТОЛЬКО для 3D
-        if (mode === '3D') {
-            const floorGeom = new THREE.PlaneGeometry(100, 100);
-            const floorMat = new THREE.MeshStandardMaterial({ color: 0x111317, roughness: 0.9 });
-            const floor = new THREE.Mesh(floorGeom, floorMat);
-            floor.rotation.x = -Math.PI / 2;
-            scene.add(floor);
+        if (mode.startsWith('3D')) {
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: 0x22251e, roughness: 0.9 }));
+            floor.rotation.x = -Math.PI / 2; scene.add(floor);
         }
 
         lines.forEach(line => {
@@ -144,88 +143,39 @@ window.onload = () => {
             const parts = trimmed.split(/\s+/);
             const command = parts[0];
 
-            // --- 2D КОМАНДЫ ---
-            if (command === 'bg_fade') {
-                textureLoader.load(parts[1], (texture) => {
-                    const geom = new THREE.PlaneGeometry(8 * aspect, 8);
-                    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
-                    mat.opacity = 0;
-                    activeBg = new THREE.Mesh(geom, mat);
-                    activeBg.position.set(0, 1.6, 0);
-                    scene.add(activeBg);
-                });
+            if (command === 'tank_spawn') {
+                const tankGroup = new THREE.Group();
+                const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.6, 3), new THREE.MeshStandardMaterial({color: 0x445533, roughness: 0.6}));
+                body.position.y = 0.3; tankGroup.add(body);
+                const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 1.5), new THREE.MeshStandardMaterial({color: 0x334422}));
+                cabin.position.set(0, 0.85, -0.2); tankGroup.add(cabin);
+                const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.8), new THREE.MeshStandardMaterial({color: 0x223311}));
+                gun.rotation.x = Math.PI / 2; gun.position.set(0, 0.85, -1.5); tankGroup.add(gun);
+                tankGroup.position.set(parseFloat(parts[1])||0, parseFloat(parts[2])||0, parseFloat(parts[3])||0);
+                scene.add(tankGroup); playerTank = tankGroup;
             }
 
-            if (command === 'sprite_img') {
-                textureLoader.load(parts[3], (texture) => {
-                    const geom = new THREE.PlaneGeometry(2.2, 3.0);
-                    const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
-                    activeSprite = new THREE.Mesh(geom, mat);
-                    activeSprite.position.set(parseFloat(parts[1]), parseFloat(parts[2]) + 1.6, 0.2);
-                    scene.add(activeSprite);
-                });
-            }
+            if (command === 'tank_speed') tankMoveSpeed = parseFloat(parts[1]) || 0.07;
+            if (command === 'camera_dist') { cameraFollowDist = parseFloat(parts[1]) || 6; cameraFollowHeight = parseFloat(parts[2]) || 2.5; }
 
-            if (command === 'sprite_state') {
-                if (activeSprite) {
-                    textureLoader.load(parts[1], (texture) => {
-                        activeSprite.material.map = texture;
-                        activeSprite.material.needsUpdate = true;
-                    });
-                }
-            }
-
-            if (command === 'screen_shake') {
-                shakeTime = 1.0;
-            }
-
-            if (command === 'speaker_name') {
-                const name = trimmed.substring(trimmed.indexOf(' ') + 1);
-                document.getElementById('speaker-title').innerText = name;
-            }
-
-            if (command === 'text_show') {
-                const message = trimmed.substring(trimmed.indexOf(' ') + 1);
-                document.getElementById('dialogue-text').innerText = message;
-                document.getElementById('dialogue-box').style.display = 'block';
-            }
-
-            // --- 3D КОМАНДЫ ---
             if (command === 'object_spawn') {
-                const x = parseFloat(parts[1]) || 0;
-                const y = parseFloat(parts[2]) || 0;
-                const z = parseFloat(parts[3]) || 0;
-                const textureFolder = parts[4];
-
-                const geom = new THREE.BoxGeometry(1.5, 1.5, 1.5);
-                let mat;
-
-                if (textureFolder) {
-                    const albedo = textureLoader.load(`${textureFolder}/albedo.jpg`);
-                    const normal = textureLoader.load(`${textureFolder}/normal.jpg`);
-                    const roughness = textureLoader.load(`${textureFolder}/roughness.jpg`);
-                    mat = new THREE.MeshStandardMaterial({ map: albedo, normalMap: normal, roughnessMap: roughness, roughness: 1.0 });
-                } else {
-                    mat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.7 });
-                }
-
-                const mesh = new THREE.Mesh(geom, mat);
-                mesh.position.set(x, y + 0.75, z);
-                scene.add(mesh);
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(2, 4, 2), new THREE.MeshStandardMaterial({ color: 0x555558, roughness: 0.8 }));
+                mesh.position.set(parseFloat(parts[1]), parseFloat(parts[2])+2, parseFloat(parts[3])); scene.add(mesh);
             }
-
-            if (command === 'fog_set') {
-                scene.fog.density = parseFloat(parts[1]) || 0.02;
-            }
-
-            // МЕДИА
+            if (command === 'fog_set') scene.fog.density = parseFloat(parts[1]);
             if (command === 'play_music') {
                 if (currentMusic) currentMusic.pause();
-                currentMusic = new Audio(parts[1]); currentMusic.loop = true; currentMusic.volume = 0.4;
-                currentMusic.play().catch(() => {});
+                currentMusic = new Audio(parts[1]); currentMusic.loop = true; currentMusic.play().catch(()=>{});
             }
-            if (command === 'play_sound') {
-                const sound = new Audio(parts[1]); sound.volume = 0.6; sound.play();
+            if (command === 'bg_fade') {
+                textureLoader.load(parts[1], (t) => {
+                    const m = new THREE.MeshBasicMaterial({ map: t, transparent: true }); m.opacity = 0;
+                    activeBg = new THREE.Mesh(new THREE.PlaneGeometry(8*aspect, 8), m); activeBg.position.set(0,1.6,0); scene.add(activeBg);
+                });
+            }
+            if (command === 'text_show') {
+                document.getElementById('dialogue-text').innerText = trimmed.substring(trimmed.indexOf(' ')+1);
+                document.getElementById('dialogue-box').style.display = 'block';
             }
         });
     });
