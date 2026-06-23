@@ -5,22 +5,7 @@
         body { margin: 0; display: flex; height: 100vh; background: #0c0c0d; color: #e1e1e6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
         #editor-side { width: 50%; height: 100%; display: flex; flex-direction: column; border-right: 2px solid #252529; }
         #monaco-container { flex-grow: 1; height: calc(100% - 90px); background: #131316; position: relative; }
-        
-        #code-input {
-            width: 100%;
-            height: 100%;
-            background: #131316;
-            color: #00ff66;
-            border: none;
-            padding: 15px;
-            font-family: 'Consolas', 'Courier New', monospace;
-            font-size: 16px;
-            resize: none;
-            outline: none;
-            box-sizing: border-box;
-            line-height: 1.5;
-        }
-
+        #code-input { width: 100%; height: 100%; background: #131316; color: #00ff66; border: none; padding: 15px; font-family: 'Consolas', 'Courier New', monospace; font-size: 16px; resize: none; outline: none; box-sizing: border-box; line-height: 1.5; }
         #run-btn { height: 45px; background: #007acc; color: white; border: none; font-size: 15px; cursor: pointer; font-weight: bold; letter-spacing: 1px; transition: 0.2s; }
         #run-btn:hover { background: #005999; box-shadow: inset 0 0 10px rgba(0,0,0,0.5); }
         #game-side { width: 50%; height: 100%; position: relative; background: #000; }
@@ -32,23 +17,24 @@
         <div style="background: #1c1c1f; padding: 12px; display: flex; gap: 15px; align-items: center; border-bottom: 1px solid #252529;">
             <span style="font-size: 13px; font-weight: bold; text-transform: uppercase; color: #9a9a1a;">Режим VISK ENGINE:</span>
             <select id="dimension-select" style="background: #2b2b30; color: white; border: 1px solid #45454c; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">
-                <option value="3D">3D (Объемный FPS)</option>
-                <option value="2D">2D (Кинематографичный)</option>
+                <option value="3D_VEHICLE">3D Tanks Mode</option>
+                <option value="3D_FPS">3D FPS Mode</option>
+                <option value="2D">2D Cinematic Mode</option>
             </select>
         </div>
 
         <div id="monaco-container">
-            <textarea id="code-input" spellcheck="false"># Демонстрация VISK SDK 3.0 (STALKER & NOVEL Edition)
-# 1. ТЕСТ 3D-РЕЖИМА (Кликни на правый экран, ходи на WASD + Мышь. Выход на ESC)
-fog_set 0.06
-object_spawn 0 0 -4 concrete
-object_spawn -3 0 -6 concrete
+            <textarea id="code-input" spellcheck="false"># Скрипт VISK ENGINE SDK
+# Управление в 3D Танках: WASD — ездить, Клик мыши — Стрельба.
 
-# 2. ТЕСТ 2D-РЕЖИМА (Переключи селектор сверху в 2D)
-# bg_fade bunker.jpg
-# sprite_img 0 -0.8 sidorovich.png
-# speaker_name Сидорович
-# text_show Ну привет, сталкер! Чего пришел?</textarea>
+tank_spawn 0 0 0
+tank_speed 0.12
+camera_dist 7 3.2
+
+# Препятствия на карте
+object_spawn -5 0 -15
+object_spawn 5 0 -20
+object_spawn 0 0 -30</textarea>
         </div>
         <button id="run-btn">ЗАПУСТИТЬ КОД (COMPILE)</button>
     </div>
@@ -56,7 +42,7 @@ object_spawn -3 0 -6 concrete
     <div id="game-side">
         <div id="dialogue-box" style="display: none; position: absolute; bottom: 20px; left: 5%; width: 90%; background: rgba(15, 15, 20, 0.9); border: 2px solid #007acc; border-radius: 8px; padding: 15px; box-sizing: border-box; font-size: 18px; color: #fff; z-index: 10;">
             <div id="speaker-title" style="font-weight: bold; color: #00ff66; margin-bottom: 5px; font-size: 16px; text-transform: uppercase;"></div>
-            <div id="dialogue-text">Текст диалога</div>
+            <div id="dialogue-text"></div>
         </div>
     </div>
 
